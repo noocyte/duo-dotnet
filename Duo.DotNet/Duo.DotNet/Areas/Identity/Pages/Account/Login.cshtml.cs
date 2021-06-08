@@ -30,7 +30,6 @@ namespace Duo.DotNet.Areas.Identity.Pages.Account
 
         private const string OAUTH_V1_HEALTH_CHECK_ENDPOINT = "https://{0}/oauth/v1/health_check";
         private const string OAUTH_V1_AUTHORIZE_ENDPOINT = "https://{0}/oauth/v1/authorize";
-        private const string OAUTH_V1_TOKEN_ENDPOINT = "https://{0}/oauth/v1/token";
 
         public LoginModel(SignInManager<IdentityUser> signInManager,
             ILogger<LoginModel> logger,
@@ -107,17 +106,24 @@ namespace Duo.DotNet.Areas.Identity.Pages.Account
                 if (result.Succeeded)
                 {
                     _logger.LogInformation("User logged in.");
+
+                    // docs: https://duo.com/docs/oauthapi
+
                     var token = GenerateHealthToken(_mfaConfig.Value);
 
                     var client = new HttpClient();
                     var healthUrl = string.Format(OAUTH_V1_HEALTH_CHECK_ENDPOINT, _mfaConfig.Value.Hostname);
 
-                    var healthContent = new MultipartFormDataContent();
-                    healthContent.Add(new StringContent(token), "client_assertion");
-                    healthContent.Add(new StringContent(_mfaConfig.Value.ClientId), "client_id");
+                    var healthContent = new MultipartFormDataContent
+                    {
+                        { new StringContent(token), "client_assertion" },
+                        { new StringContent(_mfaConfig.Value.ClientId), "client_id" }
+                    };
+
                     var healtResponse = await client.PostAsync(healthUrl, healthContent);
 
                     var respCon = await healtResponse.Content.ReadAsStringAsync();
+
                     var state = Guid.NewGuid().ToString();
                     var authzToken = GenerateAuthzToken(_mfaConfig.Value, state, Input.Email);
                     var authzUrl = string.Format(OAUTH_V1_AUTHORIZE_ENDPOINT, _mfaConfig.Value.Hostname);
@@ -190,7 +196,6 @@ namespace Duo.DotNet.Areas.Identity.Pages.Account
                     new Claim("state", state),
                     new Claim("response_type", "code"),
                     new Claim("duo_uname", username),
-                    //new Claim("use_duo_code_attribute", "true"),
                     new Claim("scope", "openid")
                 }),
 
@@ -204,5 +209,7 @@ namespace Duo.DotNet.Areas.Identity.Pages.Account
             var token = tokenHandler.CreateToken(tokenDescriptor);
             return tokenHandler.WriteToken(token);
         }
+
+       
     }
 }
